@@ -12,7 +12,6 @@ model = TauPyModel(model="iasp91")
 client = Client("IRIS")
 import matplotlib.pyplot as plt
 from matplotlib.dates import num2date
-import pandas as pd
 plt.style.use('ggplot')
 import pickle
 
@@ -39,7 +38,7 @@ class make_db:
     def __init__(self, input_values):
         self.db_name = input_values["db_name"]                                              # main directory name
         self.net_list = input_values["network_list"]                                        # network list
-        self.sta_list = input_values["station_list"]                                        # station list
+        self.sta = input_values["station"]                                        # station list
         self.stime = input_values["starttime"]                                              # start time
         self.etime = input_values["endtime"]                                                # end time
         self.minla = input_values["location_box"][0]                                        # min latitude
@@ -72,18 +71,18 @@ class make_db:
         """
         This function is written for getting stations from IRIS and writing them in a xml file.
         """
-        inv_path = glob.glob(f"{self.db_name}/inventory_*.xml")
+        inv_path = glob.glob(f"{self.db_name}/{self.sta}/inventory_*.xml")
         if len(inv_path) > 0:
             if os.path.isfile(inv_path[0]):
-                inventory = obspy.read_inventory(f"{self.db_name}/inventory_*.xml", format="STATIONXML")
+                inventory = obspy.read_inventory(f"{self.db_name}/{self.sta}/inventory_*.xml", format="STATIONXML")
                 print("Inventory is already downloaded.")
         else:
-            inventory = client.get_stations(network = ",".join(self.net_list), station = ",".join(self.sta_list), minlatitude=self.minla, maxlatitude=self.maxla, minlongitude=self.minlo, maxlongitude=self.maxlo
+            inventory = client.get_stations(network = ",".join(self.net_list), station = ",".join(self.sta), minlatitude=self.minla, maxlatitude=self.maxla, minlongitude=self.minlo, maxlongitude=self.maxlo
                                                     ,starttime=self.stime,endtime=self.etime)
-            inventory.write(f"{self.db_name}/inventory_{','.join(self.net_list)}_{self.stime.year}-{self.etime.year}.xml", format="STATIONXML")
+            inventory.write(f"{self.db_name}/{self.sta}/inventory_{','.join(self.net_list)}_{self.stime.year}-{self.etime.year}.xml", format="STATIONXML")
             print("Inventory is downloaded now.")
         self.inventory = inventory
-        print("No. Stations:", (self.station_counter()))
+        print("# of Stations:", (self.station_counter()))
         
             
 
@@ -101,23 +100,23 @@ class make_db:
         """
         This function is written for getting events from IRIS and writing them in a xml file.
         """
-        ev_path = glob.glob(f"{self.db_name}/catalog_*.xml")
+        ev_path = glob.glob(f"{self.db_name}/{self.sta}/catalog_*.xml")
         if len(ev_path) > 0:
             if os.path.isfile(ev_path[0]):
-                catal = obspy.read_events(f"{self.db_name}/catalog_*.xml")
+                catal = obspy.read_events(f"{self.db_name}/{self.sta}/catalog_*.xml")
                 print("Catalog is already downloaded.")
         else:
             catal = client.get_events(starttime=self.stime,endtime=self.etime, latitude = self.cenla, longitude = self.cenlo,
                                         minradius = self.minrad, maxradius = self.maxrad, minmagnitude = self.minmag, maxmagnitude = self.maxmag)                    
-            catal.write(f"{self.db_name}/catalog_{','.join(self.net_list)}_{self.stime.year}-{self.etime.year}.xml", format="QUAKEML")
+            catal.write(f"{self.db_name}/{self.sta}/catalog_{','.join(self.net_list)}_{self.stime.year}-{self.etime.year}.xml", format="QUAKEML")
             print("Catalog is downloaded now.")
         self.catal = catal
-        print("No. Events:", len(catal))
+        print("# of Events:", len(catal))
 
 ########################################################################################################################################################################
     def create_sub_directories(self, name):
-        if not os.path.exists(f"{self.db_name}/{name}"):
-            os.makedirs(f"{self.db_name}/{name}")
+        if not os.path.exists(f"{self.db_name}/{self.sta}/{name}"):
+            os.makedirs(f"{self.db_name}/{self.sta}/{name}")
 
 
 ########################################################################################################################################################################
@@ -134,8 +133,8 @@ class make_db:
                     if station.is_active(event_time):       #check if the channel is active at the time of the event
                         bulk.append([network.code, station.code, "*", "BH?", event_time, event_time + self.siglen])
                         bulk.append([network.code, station.code, "*", "HH?", event_time, event_time + self.siglen])
-                        self.create_sub_directories(f"{network.code}_{station.code}/{event_time.year}_{event_time.month}_{event_time.day}.{event_time.hour}_{event_time.minute}_{event_time.second}_")
-                        event.write(f"{self.db_name}/{network.code}_{station.code}/{event_time.year}_{event_time.month}_{event_time.day}.{event_time.hour}_{event_time.minute}_{event_time.second}_/event.xml", format="QUAKEML")
+                        self.create_sub_directories(f"{self.sta}/DATA/{event_time.year}_{event_time.month}_{event_time.day}.{event_time.hour}_{event_time.minute}_{event_time.second}_")
+                        event.write(f"{self.db_name}/{self.sta}/DATA/{event_time.year}_{event_time.month}_{event_time.day}.{event_time.hour}_{event_time.minute}_{event_time.second}_/event.xml", format="QUAKEML")
                         
         self.bulk = np.array(bulk)
         self.create_sub_directories("bulk_downloads")
@@ -183,8 +182,8 @@ class make_db:
             minute = tr.stats.starttime.minute
             second = tr.stats.starttime.second
             try:
-                # print(f"{self.db_name}/{network}_{station}/{year}_{month}_{day}.{hour}_{minute}_{second}_")
-                path = glob.glob(f"{self.db_name}/{network}_{station}/{year}_{month}_{day}.{hour}_{minute}_*")[0]
+                # print(f"{self.db_name}/DATA/{year}_{month}_{day}.{hour}_{minute}_{second}_")
+                path = glob.glob(f"{self.db_name}/DATA/{year}_{month}_{day}.{hour}_{minute}_*")[0]
                 related_event = obspy.read_events(f"{path}/event.xml")
                 event_time = related_event[0].origins[0].time
                 event_lat = related_event[0].origins[0].latitude
@@ -196,7 +195,7 @@ class make_db:
                 tr.stats.sac = {'stla':sta_lat, 'stlo':sta_lon, 'evla': event_lat, 'evlo': event_lon, 'evdp': event_depth, 'mag': event_mag, 'o': 0, 'kstnm': station, 'kcmpnm': channel, 'knetwk': network, 'khole': location, 'nzyear': year, 'nzjday': event_time.julday, 'nzhour': hour, 'nzmin': minute, 'nzsec': second, 'nzmsec': event_time.microsecond/1000}
                 tr.write(f"{path}/raw.{tr.stats.channel}.{tr.stats.location}.sac", format="SAC")
             except:
-                print("Error! there is no directory for this waveform. --> ", f"{self.db_name}/{network}_{station}/{year}_{month}_{day}.{hour}_{minute}_{second}_")
+                print("Error! there is no directory for this waveform. --> ", f"{self.db_name}/DATA/{year}_{month}_{day}.{hour}_{minute}_{second}_")
         
 
 ########################################################################################################################################################################
@@ -377,7 +376,7 @@ class make_rf:
             net, sta = self.net_and_sta_from_path(path_to_folder)   #extracting the name of the station and the network from the path string
             sta = stations[f"{net}_{sta}"]
             if exists(f"{path_to_folder}/RFZ.sac"):
-                print(f"RF file(s) already exist(s) for {path_to_folder}. Deleted and new RFs will be created.")
+                # print(f"RF file(s) already exist(s) for {path_to_folder}. Deleted and new RFs will be created.")
                 os.remove(f"{path_to_folder}/RFZ.sac")
                 os.remove(f"{path_to_folder}/RFR.sac")
                 os.remove(f"{path_to_folder}/RFT.sac")
@@ -393,8 +392,8 @@ class make_rf:
         
         #checking if there is a P phase and then initializing the RFData object
             if len(P_phase) == 0:
-                print(f"Failed to get P phase for {path_to_folder}")
-                print("It is maybe due to the fact that for this distance there is no P-phase.\nSkipping this station...")
+                # print(f"Failed to get P phase for {path_to_folder}")
+                # print("It is maybe due to the fact that for this distance there is no P-phase.\nSkipping this station...")
                 continue
             else:
                 P_phase = event.origins[0].time + P_phase[0].time     #estimated P arrival time using TAUPy
@@ -428,7 +427,7 @@ class make_rf:
                         pickle.dump(info_dict, f)
                     
                 except:
-                    print(f"failed to calculate SNR for {path_to_folder}")
+                    # print(f"failed to calculate SNR for {path_to_folder}")
                     snr_Z, snr_R = "None", "None"
 
                 
